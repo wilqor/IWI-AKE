@@ -4,3 +4,11 @@ install Python 2.7.10 amd64
 install wikipedia 1.4.0
     https://pypi.python.org/pypi/wikipedia/
     pip install wikipedia-1.4.0.tar.gz
+
+install nltk
+    https://pypi.python.org/pypi/nltk
+    pip install nltk
+
+install networkx
+    https://pypi.python.org/pypi/networkx/
+    pip install networkx
