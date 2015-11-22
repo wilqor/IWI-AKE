@@ -12,3 +12,8 @@ install nltk
 install networkx
     https://pypi.python.org/pypi/networkx/
     pip install networkx
+
+load english.pickle for ntlk tokenizers
+    >>> import nltk
+    >>> nltk.download()
+    let pop-up NLTK Downloader download packages

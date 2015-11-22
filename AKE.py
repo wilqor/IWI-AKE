@@ -21,7 +21,7 @@ class KeyphraseExtractionSystem:
     def __log(message):
         print '[SYSTEM]: {}'.format(message)
 
-    def extract_candidate_words(self, text, good_tags=set(['JJ','JJR','JJS','NN','NNP','NNS','NNPS'])):
+    def extract_candidate_words(self, text, good_tags={'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNPS'}):
         """
         https://www.ling.upenn.edu/courses/Fall_2003/ling001/penn_treebank_pos.html
         JJ - Adjective
@@ -36,7 +36,7 @@ class KeyphraseExtractionSystem:
         punctuation = set(string.punctuation)
         stop_words = set(nltk.corpus.stopwords.words('english'))
 
-        # tokenize and POS-tag words
+        # tokenize and Part Of Speech-tag words
         tagged_sentences = []
         for sentence in nltk.sent_tokenize(text):
             tagged_sentences.append(nltk.word_tokenize(sentence))
@@ -46,7 +46,8 @@ class KeyphraseExtractionSystem:
         # filter on certain POS tags and lowercase all words
         candidates = []
         for word, tag in tagged_words:
-            if (tag in good_tags) and (word.lower() not in stop_words) and not all(char in punctuation for char in word):
+            if (tag in good_tags) and (word.lower() not in stop_words) and not all(
+                            char in punctuation for char in word):
                 candidates.append(word.lower())
 
         return candidates
@@ -58,36 +59,35 @@ class KeyphraseExtractionSystem:
         next(b, None)
         return itertools.izip(a, b)
 
-    def extract_keyphrases_by_textrank(self, text, n_keywords=0.05):
-
-        # tokenize for all words, and extract *candidate* words
-        words = []
-        for sent in nltk.sent_tokenize(text):
-            for word in nltk.word_tokenize(sent):
-                words.append(word.lower())
-
-        candidates = self.extract_candidate_words(text)
-
-        # build graph, each node is a unique candidate
+    def build_graph_from_candidates(self, candidates):
+        """
+        each node is a unique candidate
+        """
         graph = networkx.Graph()
         graph.add_nodes_from(set(candidates))
         # iterate over word-pairs, add unweighted edges into graph
         for w1, w2 in self.to_pairs(candidates):
             if w2:
                 graph.add_edge(*sorted([w1, w2]))
+        return graph
 
-        # score nodes using default pagerank algorithm, sort by score, keep top n_keywords
-        ranks = networkx.pagerank(graph)
-        if 0 < n_keywords < 1:
-            n_keywords = int(round(len(candidates) * n_keywords))
+    def tokenize_text(self, text):
+        words = []
+        for sent in nltk.sent_tokenize(text):
+            for word in nltk.word_tokenize(sent):
+                words.append(word.lower())
+        return words
 
+    def build_word_pagerank_ranks_from_graph(self, graph, n_keywords):
         word_ranks = {}
+        ranks = networkx.pagerank(graph)
+        # keep top n_keywords, sort in decending order by score
         sorted_top_ranks = sorted(ranks.iteritems(), key=lambda x: x[1], reverse=True)[:n_keywords]
         for word_rank in sorted_top_ranks:
             word_ranks[word_rank[0]] = word_rank[1]
+        return word_ranks
 
-        keywords = set(word_ranks.keys())
-        # merge keywords into keyphrases
+    def merge_keywords_into_keyphrases(self, keywords, word_ranks, words):
         keyphrases = {}
         for i, word in enumerate(words):
             if word in keywords:
@@ -101,15 +101,23 @@ class KeyphraseExtractionSystem:
                 if keyphrase not in keyphrases:
                     avg_pagerank = sum(word_ranks[w] for w in keyphrase_words) / float(len(keyphrase_words))
                     keyphrases[keyphrase] = avg_pagerank
+        return keyphrases
 
+    def extract_keyphrases_by_textrank(self, text, n_keywords=0.05):
+        words = self.tokenize_text(text)
+        candidates = self.extract_candidate_words(text)
+        if 0 < n_keywords < 1:
+            n_keywords = int(round(len(candidates) * n_keywords))
+        graph = self.build_graph_from_candidates(candidates)
+        word_ranks = self.build_word_pagerank_ranks_from_graph(graph, n_keywords)
+        keywords = set(word_ranks.keys())
+        keyphrases = self.merge_keywords_into_keyphrases(keywords, word_ranks, words)
         return sorted(keyphrases.items(), key=operator.itemgetter(1), reverse=True)
-        
+
     def run(self):
         try:
             page = wikipedia.page(self.title)
             self.__log('Article URL: {}'.format(page.title))
-            # self.__log('Article Content: {}'.format(page.content))
-            
             keyphrases = self.extract_keyphrases_by_textrank(page.content)
             self.__log('Found keyphrases:')
             for phrase in keyphrases[:20]:
