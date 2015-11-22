@@ -82,7 +82,7 @@ class KeyphraseExtractionSystem:
         word_ranks = {}
         ranks = networkx.pagerank(graph)
         # keep top n_keywords, sort in decending order by score
-        sorted_top_ranks = sorted(ranks.iteritems(), key=lambda x: x[1], reverse=True)[:n_keywords]
+        sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)[:n_keywords]
         for word_rank in sorted_top_ranks:
             word_ranks[word_rank[0]] = word_rank[1]
         return word_ranks
