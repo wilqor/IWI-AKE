@@ -1,0 +1,6 @@
+sprawozdanie (co jakby było wiecej źródeł - np. klika artykułów o Linux, czas przetwarzania)
+stemming
+zamiast top N wg pochodnej
+źródo z tekstu zamiast z wiki
+
+NIESPUDZIANKA: GUI
