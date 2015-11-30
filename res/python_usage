@@ -1,0 +1,49 @@
+Use
+
+Since 2003, Python has consistently ranked in the top ten most popular programming languages as measured by the TIOBE
+Programming Community Index. As of September 2015, it is in the fifth position. It was ranked as Programming Language
+of the Year for the year 2007 and 2010. It is the third most popular language whose grammatical syntax is not
+predominantly based on C, e.g. C++, Objective-C (note, C# and Java only have partial syntactic similarity to C,
+such as the use of curly braces, and are closer in similarity to each other than C).
+An empirical study found scripting languages (such as Python) more productive than conventional languages (such as
+C and Java) for a programming problem involving string manipulation and search in a dictionary. Memory consumption
+was often "better than Java and not much worse than C or C++".
+
+Large organizations that make use of Python include Google, Yahoo!, CERN, NASA, and some smaller ones like ILM, and ITA.
+
+Python can serve as a scripting language for web applications, e.g., via mod_wsgi for the Apache web server. With Web
+Server Gateway Interface, a standard API has evolved to facilitate these applications. Web application frameworks
+like Django, Pylons, Pyramid, TurboGears, web2py, Tornado, Flask, Bottle and Zope support developers in the design
+and maintenance of complex applications. Pyjamas and IronPython can be used to develop the client-side of Ajax-based
+applications. SQLAlchemy can be used as data mapper to a relational database. Twisted is a framework to program
+communications between computers, and is used (for example) by Dropbox.
+
+Libraries like NumPy, SciPy and Matplotlib allow the effective use of Python in scientific computing, with specialized
+libraries such as BioPython and Astropy providing domain-specific functionality. Sage is a mathematical software with
+a "notebook" programmable in Python: its library covers many aspects of mathematics, including algebra, combinatorics,
+numerical mathematics, number theory, and calculus.
+
+Python has been successfully embedded in a number of software products as a scripting language, including in finite
+element method software such as Abaqus, 3D parametric modeler like FreeCAD, 3D animation packages such as 3ds Max,
+Blender, Cinema 4D, Lightwave, Houdini, Maya, modo, MotionBuilder, Softimage, the visual effects compositor Nuke,
+2D imaging programs like GIMP, Inkscape, Scribus and Paint Shop Pro, and musical notation program or scorewriter
+capella. GNU Debugger uses Python as a pretty printer to show complex structures such as C++ containers. Esri promotes
+Python as the best choice for writing scripts in ArcGIS. It has also been used in several video games, and has been
+adopted as first of the three available programming languages in Google App Engine, the other two being Java and Go.
+
+Python has also been used in artificial intelligence tasks. As a scripting language with module architecture, simple
+syntax and rich text processing tools, Python is often used for natural language processing tasks.
+
+Many operating systems include Python as a standard component; the language ships with most Linux distributions,
+AmigaOS 4, FreeBSD, NetBSD, OpenBSD and OS X, and can be used from the terminal. A number of Linux distributions
+use installers written in Python: Ubuntu uses the Ubiquity installer, while Red Hat Linux and Fedora use the
+Anaconda installer. Gentoo Linux uses Python in its package management system, Portage.
+
+Python has also seen extensive use in the information security industry, including in exploit development.
+
+Most of the Sugar software for the One Laptop per Child XO, now developed at Sugar Labs, is written in Python.
+
+The Raspberry Pi single-board computer project has adopted Python as its principal user-programming language.
+
+LibreOffice includes Python and intends to replace Java with Python. Python Scripting Provider is a core feature
+since Version 4.0 from 7 February 2013.

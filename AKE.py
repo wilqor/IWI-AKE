@@ -1,5 +1,7 @@
 """
-Exemplary usage: python AKE.py "Python (programming language)"
+Exemplary usages:
+python AKE.py wiki "Python (programming language)"
+python AKE.py file res/python_usage
 """
 
 import argparse
@@ -10,18 +12,69 @@ import nltk
 import string
 import networkx
 import operator
+import logging
+import requests
+import time
 
 
-class KeyphraseExtractionSystem:
+class System:
     def __init__(self, configuration):
-        self.title = configuration.title
-        self.__log('Initialized with "{}"'.format(self.title))
+        self.path = configuration.path
+        self.src = configuration.src
+        self.logger = get_logger('System')
+        self.logger.info('Chosen source "%s"', self.src)
+        self.logger.info('Chosen path "%s"', self.path)
 
     @staticmethod
-    def __log(message):
-        print '[SYSTEM]: {}'.format(message)
+    def get_keyphrases_string(keyphrases):
+        kp_str = 'Found keyphrases:\n'
+        for phrase in keyphrases:
+            kp_str += '{0:<40}: {1:.10f}\n'.format(phrase[0], phrase[1])
+        return kp_str
 
-    def extract_candidate_words(self, text, good_tags={'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNPS'}):
+    def run(self):
+        try:
+            if self.src == 'wiki':
+                provider = WikipediaContentProvider(self.path)
+            else:
+                provider = FileContentProvider(self.path)
+            extractor = KeyphraseExtractor(provider.get_content())
+
+            time_start = time.time()
+            keyphrases = extractor.extract_keyphrases_by_textrank()
+            time_end = time.time()
+            self.logger.info('Keyphrase extraction elapsed time: {:.9f} seconds'.format(time_end - time_start))
+
+            result_keyphrases = keyphrases[:20]
+            self.logger.info(self.get_keyphrases_string(result_keyphrases))
+        except ContentProviderException:
+            self.logger.error('Failed to retrieve content for keyphrase extraction')
+
+
+class KeyphraseExtractor:
+    def __init__(self, text):
+        self.text = text
+        self.n_keywords = 0.05
+        self.logger = get_logger('KeyphraseExtractor')
+
+    def extract_keyphrases_by_textrank(self):
+        self.logger.info('Starting keyphrase extraction...')
+        words = self._tokenize_text()
+        candidates = self._extract_candidate_words()
+        self._setup_keywords(candidates)
+        graph = self._build_graph_from_candidates(candidates)
+        word_ranks = self._build_word_pagerank_ranks_from_graph(graph)
+        keywords = set(word_ranks.keys())
+        keyphrases = self._merge_keywords_into_keyphrases(keywords, word_ranks, words)
+        result = sorted(keyphrases.items(), key=operator.itemgetter(1), reverse=True)
+        self.logger.info('Finished keyphrase extraction')
+        return result
+
+    def _setup_keywords(self, candidates):
+        if 0 < self.n_keywords < 1:
+            self.n_keywords = int(round(len(candidates) * self.n_keywords))
+
+    def _extract_candidate_words(self, good_tags={'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNPS'}):
         """
         https://www.ling.upenn.edu/courses/Fall_2003/ling001/penn_treebank_pos.html
         JJ - Adjective
@@ -35,59 +88,57 @@ class KeyphraseExtractionSystem:
         # exclude candidates that are stop words or entirely punctuation
         punctuation = set(string.punctuation)
         stop_words = set(nltk.corpus.stopwords.words('english'))
-
         # tokenize and Part Of Speech-tag words
         tagged_sentences = []
-        for sentence in nltk.sent_tokenize(text):
+        for sentence in nltk.sent_tokenize(self.text):
             tagged_sentences.append(nltk.word_tokenize(sentence))
-
         tagged_words = itertools.chain.from_iterable(nltk.pos_tag_sents(tagged_sentences))
-
         # filter on certain POS tags and lowercase all words
         candidates = []
         for word, tag in tagged_words:
             if (tag in good_tags) and (word.lower() not in stop_words) and not all(
                             char in punctuation for char in word):
                 candidates.append(word.lower())
-
         return candidates
 
-    def to_pairs(self, iterable):
+    @staticmethod
+    def _to_pairs(iterable):
         """ Converts iterable i to pairs:
         i -> (i0,i1), (i1,i2), (i2, i3), ..."""
         a, b = itertools.tee(iterable)
         next(b, None)
         return itertools.izip(a, b)
 
-    def build_graph_from_candidates(self, candidates):
+    def _build_graph_from_candidates(self, candidates):
         """
         each node is a unique candidate
         """
         graph = networkx.Graph()
         graph.add_nodes_from(set(candidates))
         # iterate over word-pairs, add unweighted edges into graph
-        for w1, w2 in self.to_pairs(candidates):
+        for w1, w2 in self._to_pairs(candidates):
             if w2:
                 graph.add_edge(*sorted([w1, w2]))
         return graph
 
-    def tokenize_text(self, text):
+    def _tokenize_text(self):
         words = []
-        for sent in nltk.sent_tokenize(text):
+        for sent in nltk.sent_tokenize(self.text):
             for word in nltk.word_tokenize(sent):
                 words.append(word.lower())
         return words
 
-    def build_word_pagerank_ranks_from_graph(self, graph, n_keywords):
+    def _build_word_pagerank_ranks_from_graph(self, graph):
         word_ranks = {}
         ranks = networkx.pagerank(graph)
         # keep top n_keywords, sort in decending order by score
-        sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)[:n_keywords]
+        sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)[:self.n_keywords]
         for word_rank in sorted_top_ranks:
             word_ranks[word_rank[0]] = word_rank[1]
         return word_ranks
 
-    def merge_keywords_into_keyphrases(self, keywords, word_ranks, words):
+    @staticmethod
+    def _merge_keywords_into_keyphrases(keywords, word_ranks, words):
         keyphrases = {}
         for i, word in enumerate(words):
             if word in keywords:
@@ -103,30 +154,76 @@ class KeyphraseExtractionSystem:
                     keyphrases[keyphrase] = avg_pagerank
         return keyphrases
 
-    def extract_keyphrases_by_textrank(self, text, n_keywords=0.05):
-        words = self.tokenize_text(text)
-        candidates = self.extract_candidate_words(text)
-        if 0 < n_keywords < 1:
-            n_keywords = int(round(len(candidates) * n_keywords))
-        graph = self.build_graph_from_candidates(candidates)
-        word_ranks = self.build_word_pagerank_ranks_from_graph(graph, n_keywords)
-        keywords = set(word_ranks.keys())
-        keyphrases = self.merge_keywords_into_keyphrases(keywords, word_ranks, words)
-        return sorted(keyphrases.items(), key=operator.itemgetter(1), reverse=True)
 
-    def run(self):
+class AbstractContentProvider:
+    def __init__(self, name):
+        self.logger = get_logger(name)
+
+    def get_content(self):
+        raise NotImplemented()
+
+
+class ContentProviderException(Exception):
+    def __init__(self):
+        pass
+
+
+class WikipediaContentProvider(AbstractContentProvider):
+    def __init__(self, title):
+        AbstractContentProvider.__init__(self, 'WikipediaContentProvider')
+        self.title = title
+        self.logger.info('Initialized with title "{}"'.format(self.title))
+
+    def get_content(self):
         try:
+            self.logger.info('Trying to get Wikipedia page...')
             page = wikipedia.page(self.title)
-            self.__log('Article URL: {}'.format(page.title))
-            keyphrases = self.extract_keyphrases_by_textrank(page.content)
-            self.__log('Found keyphrases:')
-            for phrase in keyphrases[:20]:
-                self.__log('  {}: {}'.format(phrase[0], phrase[1]))
+            self.logger.info('Got page entitled: "{}"'.format(page.title))
+            self.logger.info('Preparing content...')
+            content = page.content
+            self.logger.info('Page content ready')
+            return content
         except wikipedia.exceptions.DisambiguationError as e:
-            self.__log('Provided title ambiguous, try running with of the following: {}'.format(e.options))
-            pass
+            self.logger.error(
+                'Provided title ambiguous, try running with of the following: {}'.format(e.options))
+            raise ContentProviderException()
         except wikipedia.exceptions.PageError:
-            self.__log('Provided title invalid')
+            self.logger.error('Provided article title invalid')
+            raise ContentProviderException()
+        except requests.exceptions.ConnectionError:
+            self.logger.error('Internet connection failed')
+            raise ContentProviderException()
+
+
+class FileContentProvider(AbstractContentProvider):
+    def __init__(self, path):
+        AbstractContentProvider.__init__(self, 'FileContentProvider')
+        self.path = path
+        self.logger.info('Initialized with file path "{}"'.format(self.path))
+
+    def get_content(self):
+        try:
+            f = open(self.path, 'r')
+            self.logger.info('Reading file content...')
+            content = f.read()
+            self.logger.info('File content ready')
+            return content
+        except IOError as e:
+            self.logger.error('Could not open file source due to error: {}'.format(e.strerror))
+            raise ContentProviderException()
+        else:
+            f.close()
+
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    return logger
 
 
 def set_system_encoding():
@@ -135,15 +232,16 @@ def set_system_encoding():
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('title', help='title of Wikipedia article for keyphrase extraction', type=str)
+    parser = argparse.ArgumentParser(description='Extract keyphrases from provided source of text')
+    parser.add_argument('src', choices=['wiki', 'file'], help='source of text')
+    parser.add_argument('path', help='title of Wikipedia article or path to file according to selection', type=str)
     return parser.parse_args()
 
 
 def main():
     configuration = parse_args()
     set_system_encoding()
-    system = KeyphraseExtractionSystem(configuration)
+    system = System(configuration)
     system.run()
 
 
