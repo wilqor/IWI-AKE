@@ -54,14 +54,13 @@ class System:
 class KeyphraseExtractor:
     def __init__(self, text):
         self.text = text
-        self.n_keywords = 0.05
+        self.top_keywords_rank = 0.6
         self.logger = get_logger('KeyphraseExtractor')
 
     def extract_keyphrases_by_textrank(self):
         self.logger.info('Starting keyphrase extraction...')
         words = self._tokenize_text()
         candidates = self._extract_candidate_words()
-        self._setup_keywords(candidates)
         graph = self._build_graph_from_candidates(candidates)
         word_ranks = self._build_word_pagerank_ranks_from_graph(graph)
         keywords = set(word_ranks.keys())
@@ -69,10 +68,6 @@ class KeyphraseExtractor:
         result = sorted(keyphrases.items(), key=operator.itemgetter(1), reverse=True)
         self.logger.info('Finished keyphrase extraction')
         return result
-
-    def _setup_keywords(self, candidates):
-        if 0 < self.n_keywords < 1:
-            self.n_keywords = int(round(len(candidates) * self.n_keywords))
 
     def _extract_candidate_words(self, good_tags={'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNPS'}):
         """
@@ -132,9 +127,14 @@ class KeyphraseExtractor:
         word_ranks = {}
         ranks = networkx.pagerank(graph)
         # keep top n_keywords, sort in decending order by score
-        sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)[:self.n_keywords]
+        sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)
+        total_rank = 0
         for word_rank in sorted_top_ranks:
             word_ranks[word_rank[0]] = word_rank[1]
+            total_rank += word_rank[1]
+            if total_rank >= self.top_keywords_rank:
+                break
+
         return word_ranks
 
     @staticmethod
