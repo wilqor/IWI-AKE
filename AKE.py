@@ -1,6 +1,6 @@
 """
 Exemplary usages:
-python AKE.py wiki "Python (programming language)"
+python AKE.py wiki "Python (programming language), Java"
 python AKE.py file res/python_usage
 python AKE.py dir res
 """
@@ -177,20 +177,29 @@ class ContentProviderException(Exception):
 
 
 class WikipediaContentProvider(AbstractContentProvider):
-    def __init__(self, title):
+    def __init__(self, titles):
         AbstractContentProvider.__init__(self, 'WikipediaContentProvider')
-        self.title = title
-        self.logger.info('Initialized with title "{}"'.format(self.title))
+        self.titles = [s.strip() for s in titles.split(',')]
+        self.logger.info('Initialized with titles "{}"'.format(titles))
 
     def get_content(self):
+        self.logger.info('Trying to get Wikipedia pages...')
+        contents = self._get_all_pages_content()
+        self.logger.info('Pages content ready')
+        return ''.join(contents)
+
+    def _get_all_pages_content(self):
+        contents = []
+        for title in self.titles:
+            contents.append(self._get_page_content(title))
+        return contents
+
+    def _get_page_content(self, title):
         try:
-            self.logger.info('Trying to get Wikipedia page...')
-            page = wikipedia.page(self.title)
+            self.logger.info('Looking for page "{}"'.format(title))
+            page = wikipedia.page(title)
             self.logger.info('Got page entitled: "{}"'.format(page.title))
-            self.logger.info('Preparing content...')
-            content = page.content
-            self.logger.info('Page content ready')
-            return content
+            return page.content
         except wikipedia.exceptions.DisambiguationError as e:
             self.logger.error(
                 'Provided title ambiguous, try running with of the following: {}'.format(e.options))
@@ -273,7 +282,7 @@ def set_system_encoding():
 def parse_args():
     parser = argparse.ArgumentParser(description='Extract keyphrases from provided source of text')
     parser.add_argument('src', choices=['wiki', 'file', 'dir'], help='source of text')
-    parser.add_argument('path', help='title of Wikipedia article/path to file/path to directory',
+    parser.add_argument('path', help='title of coma-separated Wikipedia articles/path to file/path to directory',
                         type=str)
     return parser.parse_args()
 
