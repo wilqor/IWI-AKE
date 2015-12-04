@@ -220,11 +220,11 @@ class FileContentProvider(AbstractContentProvider):
 
     def get_content(self):
         try:
-            f = open(self.path, 'r')
-            self.logger.info('Reading file content...')
-            content = f.read()
-            self.logger.info('File content ready')
-            return content
+            with open(self.path, 'r') as f:
+                self.logger.info('Reading file content...')
+                content = f.read()
+                self.logger.info('File content ready')
+                return content
         except IOError as e:
             self.logger.error('Could not open file source due to error: {}'.format(e.strerror))
             raise ContentProviderException()
@@ -254,13 +254,11 @@ class DirectoryContentProvider(AbstractContentProvider):
 
     def _get_single_file_content(self, path):
         try:
-            f = open(path, 'r')
-            return f.read()
+            with open(path, 'r') as f:
+                return f.read()
         except IOError as e:
             self.logger.error('Could not open file {} due to error: {}'.format(path, e.strerror))
             raise ContentProviderException()
-        else:
-            pass
 
 
 def get_logger(name):
