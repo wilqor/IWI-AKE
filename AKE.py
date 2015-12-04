@@ -2,9 +2,11 @@
 Exemplary usages:
 python AKE.py wiki "Python (programming language)"
 python AKE.py file res/python_usage
+python AKE.py dir res
 """
 
 import argparse
+import os
 import sys
 import wikipedia
 import itertools
@@ -34,10 +36,7 @@ class System:
 
     def run(self):
         try:
-            if self.src == 'wiki':
-                provider = WikipediaContentProvider(self.path)
-            else:
-                provider = FileContentProvider(self.path)
+            provider = self._get_provider_from_src()
             extractor = KeyphraseExtractor(provider.get_content())
 
             time_start = time.time()
@@ -49,6 +48,15 @@ class System:
             self.logger.info(self.get_keyphrases_string(result_keyphrases))
         except ContentProviderException:
             self.logger.error('Failed to retrieve content for keyphrase extraction')
+
+    def _get_provider_from_src(self):
+        if self.src == 'wiki':
+            provider = WikipediaContentProvider(self.path)
+        elif self.src == 'dir':
+            provider = DirectoryContentProvider(self.path)
+        else:
+            provider = FileContentProvider(self.path)
+        return provider
 
 
 class KeyphraseExtractor:
@@ -215,6 +223,37 @@ class FileContentProvider(AbstractContentProvider):
             f.close()
 
 
+class DirectoryContentProvider(AbstractContentProvider):
+    def __init__(self, dir_path):
+        AbstractContentProvider.__init__(self, 'DirectoryContentProvider')
+        self.dir_path = dir_path
+        self.logger.info('Initialized with directory path "{}"'.format(self.dir_path))
+
+    def get_content(self):
+        self.logger.info('Reading directory content...')
+        contents = self._get_directory_contents()
+        self.logger.info('Directory content ready')
+        return ''.join(contents)
+
+    def _get_directory_contents(self):
+        contents = []
+        for root, dirs, files in os.walk(self.dir_path):
+            for name in files:
+                path = os.path.join(root, name)
+                contents.append(self._get_single_file_content(path))
+        return contents
+
+    def _get_single_file_content(self, path):
+        try:
+            f = open(path, 'r')
+            return f.read()
+        except IOError as e:
+            self.logger.error('Could not open file {} due to error: {}'.format(path, e.strerror))
+            raise ContentProviderException()
+        else:
+            pass
+
+
 def get_logger(name):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
@@ -233,8 +272,9 @@ def set_system_encoding():
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Extract keyphrases from provided source of text')
-    parser.add_argument('src', choices=['wiki', 'file'], help='source of text')
-    parser.add_argument('path', help='title of Wikipedia article or path to file according to selection', type=str)
+    parser.add_argument('src', choices=['wiki', 'file', 'dir'], help='source of text')
+    parser.add_argument('path', help='title of Wikipedia article/path to file/path to directory',
+                        type=str)
     return parser.parse_args()
 
 
