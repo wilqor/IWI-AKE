@@ -17,6 +17,7 @@ import operator
 import logging
 import requests
 import time
+from nltk.stem import WordNetLemmatizer
 
 
 class System:
@@ -64,6 +65,7 @@ class KeyphraseExtractor:
         self.text = text
         self.top_keywords_rank = 0.6
         self.logger = get_logger('KeyphraseExtractor')
+        self.lem = WordNetLemmatizer()
 
     def extract_keyphrases_by_textrank(self):
         self.logger.info('Starting keyphrase extraction...')
@@ -101,7 +103,7 @@ class KeyphraseExtractor:
         for word, tag in tagged_words:
             if (tag in good_tags) and (word.lower() not in stop_words) and not all(
                             char in punctuation for char in word):
-                candidates.append(word.lower())
+                candidates.append(self._normalize_word(word))
         return candidates
 
     @staticmethod
@@ -128,8 +130,11 @@ class KeyphraseExtractor:
         words = []
         for sent in nltk.sent_tokenize(self.text):
             for word in nltk.word_tokenize(sent):
-                words.append(word.lower())
+                words.append(self._normalize_word(word))
         return words
+
+    def _normalize_word(self, word):
+        return self.lem.lemmatize(word.lower())
 
     def _build_word_pagerank_ranks_from_graph(self, graph):
         word_ranks = {}
@@ -228,8 +233,6 @@ class FileContentProvider(AbstractContentProvider):
         except IOError as e:
             self.logger.error('Could not open file source due to error: {}'.format(e.strerror))
             raise ContentProviderException()
-        else:
-            f.close()
 
 
 class DirectoryContentProvider(AbstractContentProvider):
