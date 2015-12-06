@@ -1,3 +1,4 @@
+import sys
 from Tkinter import *
 from tkFileDialog import askopenfilename
 from tkFileDialog import askdirectory
@@ -15,7 +16,7 @@ class Application(Frame):
     def set_keyphrases(self, keyphrases, elapsed):
         self.clear_keyphrases()
         content = 'Keyphrase extraction elapsed time: {:.9f} seconds\n'.format(elapsed)
-        content += System.get_keyphrases_string(keyphrases[:20])
+        content += System.get_keyphrases_string(keyphrases)
         self.text.insert(END, content)
         self.text.configure(state="disabled")
 
@@ -130,6 +131,9 @@ class Application(Frame):
         self.file_path = None
         self.dir_path = None
         self.wiki_titles = None
+		
+        reload(sys)
+        sys.setdefaultencoding('utf-8')
 
 if __name__ == '__main__':
     root = Tk()

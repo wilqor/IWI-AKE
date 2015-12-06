@@ -64,6 +64,7 @@ class KeyphraseExtractor:
     def __init__(self, text):
         self.text = text
         self.top_keywords_rank = 0.6
+        self.top_keyphrases = 0.2
         self.logger = get_logger('KeyphraseExtractor')
         self.lem = WordNetLemmatizer()
 
@@ -76,8 +77,9 @@ class KeyphraseExtractor:
         keywords = set(word_ranks.keys())
         keyphrases = self._merge_keywords_into_keyphrases(keywords, word_ranks, words)
         result = sorted(keyphrases.items(), key=operator.itemgetter(1), reverse=True)
+        top_result = self.get_top_keyphrases(result)
         self.logger.info('Finished keyphrase extraction')
-        return result
+        return top_result
 
     def _extract_candidate_words(self, good_tags={'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNPS'}):
         """
@@ -167,6 +169,21 @@ class KeyphraseExtractor:
                     keyphrases[keyphrase] = avg_pagerank
         return keyphrases
 
+    def get_top_keyphrases(self, phrases):
+        total_sum = 0
+        for phrase in phrases:
+            total_sum += phrase[1]
+
+        threshold_sum = self.top_keyphrases * total_sum
+        result = []
+        sub_sum = 0
+        for phrase in phrases:
+            sub_sum += phrase[1]
+            if sub_sum >= threshold_sum:
+                break
+            result.append(phrase)
+
+        return result
 
 class AbstractContentProvider:
     def __init__(self, name):
