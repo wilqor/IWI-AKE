@@ -45,8 +45,7 @@ class System:
             time_end = time.time()
             self.logger.info('Keyphrase extraction elapsed time: {:.9f} seconds'.format(time_end - time_start))
 
-            result_keyphrases = keyphrases[:20]
-            self.logger.info(self.get_keyphrases_string(result_keyphrases))
+            self.logger.info(self.get_keyphrases_string(keyphrases))
         except ContentProviderException:
             self.logger.error('Failed to retrieve content for keyphrase extraction')
 
