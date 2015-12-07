@@ -1,6 +1,5 @@
-sprawozdanie (co jakby było wiecej źródeł - np. klika artykułów o Linux, czas przetwarzania)
-stemming
-zamiast top N wg pochodnej
-źródo z tekstu zamiast z wiki
+﻿klasteryzacja dla fraz, np. klaster python (python language, python scripting), tag java (java compiler, java application) i language (programing language)
+podobieństwo dla plików i artykułów na wiki: jeden master artykuł/plik i na podstawie linków/kategorii/pozostałych plików w folderze wybór podobnych (których frazy kluczowe się pokrywają)
+gui: konfigurowalny współczynnik do obcinania
 
-NIESPUDZIANKA: GUI
+dokument o uniwersalnym tagowaniu tekstu
