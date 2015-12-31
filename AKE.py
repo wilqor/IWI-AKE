@@ -17,6 +17,7 @@ import operator
 import logging
 import requests
 import time
+import collections
 from nltk.stem import WordNetLemmatizer
 
 
@@ -30,10 +31,19 @@ class System:
 
     @staticmethod
     def get_keyphrases_string(keyphrases):
-        kp_str = 'Found keyphrases:\n'
+        kp_str = 'Found keyphrases:\n\n'
         for phrase in keyphrases:
             kp_str += '{0:<40}: {1:.10f}\n'.format(phrase[0], phrase[1])
         return kp_str
+
+    @staticmethod
+    def get_clustered_keyphrases_string(clustered_keyphrases):
+        clustered_result = 'Found clusters:\n\n'
+        for k in sorted(clustered_keyphrases.keys(), key=lambda x: len(clustered_keyphrases[x]), reverse=True):
+            clustered_result += k + ":\n"
+            for s in clustered_keyphrases[k]:
+                clustered_result += "\t" + s + "\n"
+        return clustered_result
 
     def run(self):
         try:
@@ -43,9 +53,14 @@ class System:
             time_start = time.time()
             keyphrases = extractor.extract_keyphrases_by_textrank()
             time_end = time.time()
+            top_keyphrases = extractor.get_top_keyphrases(keyphrases, 0.2)
             self.logger.info('Keyphrase extraction elapsed time: {:.9f} seconds'.format(time_end - time_start))
 
-            self.logger.info(self.get_keyphrases_string(keyphrases))
+            self.logger.info(self.get_keyphrases_string(top_keyphrases))
+
+            clusters = extractor.clusterize(top_keyphrases)
+            self.logger.info(self.get_clustered_keyphrases_string(clusters))
+
         except ContentProviderException:
             self.logger.error('Failed to retrieve content for keyphrase extraction')
 
@@ -63,7 +78,6 @@ class KeyphraseExtractor:
     def __init__(self, text):
         self.text = text
         self.top_keywords_rank = 0.6
-        self.top_keyphrases = 0.2
         self.logger = get_logger('KeyphraseExtractor')
         self.lem = WordNetLemmatizer()
 
@@ -76,9 +90,9 @@ class KeyphraseExtractor:
         keywords = set(word_ranks.keys())
         keyphrases = self._merge_keywords_into_keyphrases(keywords, word_ranks, words)
         result = sorted(keyphrases.items(), key=operator.itemgetter(1), reverse=True)
-        top_result = self.get_top_keyphrases(result)
+        normalized_result = self._normalize_weights(result)
         self.logger.info('Finished keyphrase extraction')
-        return top_result
+        return normalized_result
 
     def _extract_candidate_words(self, good_tags={'JJ', 'JJR', 'JJS', 'NN', 'NNP', 'NNS', 'NNPS'}):
         """
@@ -140,7 +154,7 @@ class KeyphraseExtractor:
     def _build_word_pagerank_ranks_from_graph(self, graph):
         word_ranks = {}
         ranks = networkx.pagerank(graph)
-        # keep top n_keywords, sort in decending order by score
+        # keep top n_keywords, sort in descending order by score
         sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)
         total_rank = 0
         for word_rank in sorted_top_ranks:
@@ -168,12 +182,25 @@ class KeyphraseExtractor:
                     keyphrases[keyphrase] = avg_pagerank
         return keyphrases
 
-    def get_top_keyphrases(self, phrases):
+    @staticmethod
+    def _normalize_weights(keyphrases):
+        total_sum = 0
+        for phrase in keyphrases:
+            total_sum += phrase[1]
+
+        multiplier = 1/total_sum
+        result = []
+        for phrase in keyphrases:
+            result.append((phrase[0], phrase[1] * multiplier))
+        return result
+
+    @staticmethod
+    def get_top_keyphrases(phrases, top_keyphrases):
         total_sum = 0
         for phrase in phrases:
             total_sum += phrase[1]
 
-        threshold_sum = self.top_keyphrases * total_sum
+        threshold_sum = top_keyphrases * total_sum
         result = []
         sub_sum = 0
         for phrase in phrases:
@@ -181,6 +208,23 @@ class KeyphraseExtractor:
             if sub_sum >= threshold_sum:
                 break
             result.append(phrase)
+
+        return result
+
+    @staticmethod
+    def clusterize(keyphrases):
+        phrases = [p[0] for p in keyphrases]
+        flat = ' '.join(phrases).split()
+        counter = collections.Counter(flat)
+        clusters = [c for c in counter.keys() if len(c) > 1 and counter[c] >= 1]
+
+        result = {}
+
+        for cluster_name in clusters:
+            result[cluster_name] = []
+            for phrase in phrases:
+                if cluster_name in phrase:
+                    result[cluster_name].append(phrase)
 
         return result
 
