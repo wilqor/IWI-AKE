@@ -3,6 +3,8 @@ Exemplary usages:
 python AKE.py wiki "Python (programming language), Java"
 python AKE.py file res/python_usage
 python AKE.py dir res
+python AKE.py file res/python_usage --master
+python AKE.py file res/java_usage --master
 """
 
 import argparse
@@ -25,9 +27,11 @@ class System:
     def __init__(self, configuration):
         self.path = configuration.path
         self.src = configuration.src
+        self.master = configuration.master
         self.logger = get_logger('System')
         self.logger.info('Chosen source "%s"', self.src)
         self.logger.info('Chosen path "%s"', self.path)
+        self.logger.info('Master option "%s"', self.master)
 
     @staticmethod
     def get_keyphrases_string(keyphrases):
@@ -47,41 +51,92 @@ class System:
 
     def run(self):
         try:
-            provider = self._get_provider_from_src()
-            extractor = KeyphraseExtractor(provider.get_content())
+            main_provider = self._get_main_provider()
+            main_extractor = KeyphraseExtractor(main_provider)
+            comparison_extractor = self._get_comparison_extractor()
 
             time_start = time.time()
-            keyphrases = extractor.extract_keyphrases_by_textrank()
+            keyphrases = main_extractor.extract_keyphrases_by_textrank()
+            top_keyphrases = main_extractor.get_top_keyphrases(keyphrases, 0.2)
             time_end = time.time()
-            top_keyphrases = extractor.get_top_keyphrases(keyphrases, 0.2)
             self.logger.info('Keyphrase extraction elapsed time: {:.9f} seconds'.format(time_end - time_start))
 
             self.logger.info(self.get_keyphrases_string(top_keyphrases))
-
-            clusters = extractor.clusterize(top_keyphrases)
+            clusters = main_extractor.clusterize(top_keyphrases)
             self.logger.info(self.get_clustered_keyphrases_string(clusters))
 
+            if comparison_extractor is not None:
+                comparison_keyphrases_map = comparison_extractor.extract_keyphrases_map_by_textrank()
+                DocumentKeyphrasesComparator(top_keyphrases, comparison_keyphrases_map).compare()
+
+        except ConfigurationException:
+            self.logger.error('Configuration error, could not start keyphrase extraction')
         except ContentProviderException:
             self.logger.error('Failed to retrieve content for keyphrase extraction')
 
-    def _get_provider_from_src(self):
+    def _get_main_provider(self):
         if self.src == 'wiki':
-            provider = WikipediaContentProvider(self.path)
+            return WikipediaContentProvider(self.path)
         elif self.src == 'dir':
-            provider = DirectoryContentProvider(self.path)
+            return DirectoryContentProvider(self.path)
+        elif self.src == 'file':
+            return FileContentProvider(self.path)
         else:
-            provider = FileContentProvider(self.path)
-        return provider
+            raise ConfigurationException()
+
+    def _get_comparison_extractor(self):
+        if self.master:
+            if self.src == 'dir':
+                self.logger.error('dir source is not supported for master option!')
+                raise ConfigurationException()
+            elif self.src == 'file':
+                return self._get_comparison_files_extractor()
+            elif self.src == 'wiki':
+                try:
+                    return self._get_linked_wiki_pages_extractor()
+                except WikipediaException:
+                    self.logger.error('Linked wiki page providers cannot be initialized')
+                    raise ConfigurationException()
+        else:
+            return None
+
+    def _get_comparison_files_extractor(self):
+        master_dir_path = os.path.dirname(self.path)
+        excluded_path = os.path.basename(self.path)
+        self.logger.info('Finding comparison file paths...')
+        comparison_file_paths = DirectoryContentLister(master_dir_path, excluded_path).get_content_list()
+        self.logger.info('Found comparison file paths')
+        self.logger.info('Preparing comparison file providers...')
+        file_providers = []
+        for path in comparison_file_paths:
+            file_providers.append(FileContentProvider(path))
+        self.logger.info('Comparison file providers ready')
+        return MultipleProvidersKeyphraseExtractor(file_providers)
+
+    def _get_linked_wiki_pages_extractor(self):
+        self.logger.info('Finding linked to master wiki pages...')
+        page = WikipediaPageFinder(self.path).get_wikipedia_page()
+        links = page.links
+        self.logger.info('Found {} linked wiki pages'.format(len(links)))
+        self.logger.info('Preparing linked wiki page providers...')
+        link_page_providers = []
+        for link in links:
+            link_page_providers.append(WikipediaContentProvider(link))
+        self.logger.info('Linked wiki page providers ready')
+        return MultipleProvidersKeyphraseExtractor(link_page_providers)
 
 
 class KeyphraseExtractor:
-    def __init__(self, text):
-        self.text = text
+    def __init__(self, provider):
         self.top_keywords_rank = 0.6
         self.logger = get_logger('KeyphraseExtractor')
         self.lem = WordNetLemmatizer()
+        self.provider = provider
+        self.text = ''
 
     def extract_keyphrases_by_textrank(self):
+        self.logger.info('Getting text content from provider entitled "{}"'.format(self.provider.get_title()))
+        self.text = self.provider.get_content()
         self.logger.info('Starting keyphrase extraction...')
         words = self._tokenize_text()
         candidates = self._extract_candidate_words()
@@ -228,12 +283,32 @@ class KeyphraseExtractor:
 
         return result
 
+
+class MultipleProvidersKeyphraseExtractor:
+    def __init__(self, providers):
+        self.providers = providers
+
+    def extract_keyphrases_map_by_textrank(self):
+        keyphrases_dict = {}
+        for provider in self.providers:
+            extractor = KeyphraseExtractor(provider)
+            title = provider.get_title()
+            keyphrases = extractor.extract_keyphrases_by_textrank()
+            top_keyphrases = extractor.get_top_keyphrases(keyphrases, 0.2)
+            keyphrases_dict[title] = top_keyphrases
+        return keyphrases_dict
+
+
 class AbstractContentProvider:
-    def __init__(self, name):
+    def __init__(self, name, title):
         self.logger = get_logger(name)
+        self.title = title
 
     def get_content(self):
         raise NotImplemented()
+
+    def get_title(self):
+        return self.title
 
 
 class ContentProviderException(Exception):
@@ -241,9 +316,19 @@ class ContentProviderException(Exception):
         pass
 
 
+class ConfigurationException(Exception):
+    def __init__(self):
+        pass
+
+
+class WikipediaException(Exception):
+    def __init__(self):
+        pass
+
+
 class WikipediaContentProvider(AbstractContentProvider):
     def __init__(self, titles):
-        AbstractContentProvider.__init__(self, 'WikipediaContentProvider')
+        AbstractContentProvider.__init__(self, 'WikipediaContentProvider', titles)
         self.titles = [s.strip() for s in titles.split(',')]
         self.logger.info('Initialized with titles "{}"'.format(titles))
 
@@ -259,27 +344,19 @@ class WikipediaContentProvider(AbstractContentProvider):
             contents.append(self._get_page_content(title))
         return contents
 
-    def _get_page_content(self, title):
+    @staticmethod
+    def _get_page_content(title):
         try:
-            self.logger.info('Looking for page "{}"'.format(title))
-            page = wikipedia.page(title)
-            self.logger.info('Got page entitled: "{}"'.format(page.title))
+            page_finder = WikipediaPageFinder(title)
+            page = page_finder.get_wikipedia_page()
             return page.content
-        except wikipedia.exceptions.DisambiguationError as e:
-            self.logger.error(
-                'Provided title ambiguous, try running with of the following: {}'.format(e.options))
-            raise ContentProviderException()
-        except wikipedia.exceptions.PageError:
-            self.logger.error('Provided article title invalid')
-            raise ContentProviderException()
-        except requests.exceptions.ConnectionError:
-            self.logger.error('Internet connection failed')
+        except WikipediaException:
             raise ContentProviderException()
 
 
 class FileContentProvider(AbstractContentProvider):
     def __init__(self, path):
-        AbstractContentProvider.__init__(self, 'FileContentProvider')
+        AbstractContentProvider.__init__(self, 'FileContentProvider', path)
         self.path = path
         self.logger.info('Initialized with file path "{}"'.format(self.path))
 
@@ -297,7 +374,7 @@ class FileContentProvider(AbstractContentProvider):
 
 class DirectoryContentProvider(AbstractContentProvider):
     def __init__(self, dir_path):
-        AbstractContentProvider.__init__(self, 'DirectoryContentProvider')
+        AbstractContentProvider.__init__(self, 'DirectoryContentProvider', dir_path)
         self.dir_path = dir_path
         self.logger.info('Initialized with directory path "{}"'.format(self.dir_path))
 
@@ -309,10 +386,9 @@ class DirectoryContentProvider(AbstractContentProvider):
 
     def _get_directory_contents(self):
         contents = []
-        for root, dirs, files in os.walk(self.dir_path):
-            for name in files:
-                path = os.path.join(root, name)
-                contents.append(self._get_single_file_content(path))
+        content_list = DirectoryContentLister(self.dir_path).get_content_list()
+        for file_path in content_list:
+            contents.append(self._get_single_file_content(file_path))
         return contents
 
     def _get_single_file_content(self, path):
@@ -322,6 +398,81 @@ class DirectoryContentProvider(AbstractContentProvider):
         except IOError as e:
             self.logger.error('Could not open file {} due to error: {}'.format(path, e.strerror))
             raise ContentProviderException()
+
+
+class WikipediaPageFinder:
+    def __init__(self, title):
+        self.title = title
+        self.logger = get_logger("WikipediaPageFinder")
+        self.logger.info('Initialized with title "{}"'.format(title))
+
+    def get_wikipedia_page(self):
+        try:
+            self.logger.info('Looking for page "{}"'.format(self.title))
+            page = wikipedia.page(self.title)
+            self.logger.info('Got page entitled: "{}"'.format(page.title))
+            return page
+        except wikipedia.exceptions.DisambiguationError as e:
+            self.logger.error(
+                'Provided title ambiguous, try running with of the following: {}'.format(e.options))
+            raise WikipediaException()
+        except wikipedia.exceptions.PageError:
+            self.logger.error('Provided article title invalid')
+            raise WikipediaException()
+        except requests.exceptions.ConnectionError:
+            self.logger.error('Internet connection failed')
+            raise WikipediaException()
+
+
+class DirectoryContentLister:
+    def __init__(self, dir_path, excluded_file=None):
+        self.dir_path = dir_path
+        self.excluded_file = excluded_file
+
+    def get_content_list(self):
+        content_list = []
+        for root, dirs, files in os.walk(self.dir_path):
+            for name in files:
+                if name != self.excluded_file:
+                    path = os.path.join(root, name)
+                    content_list.append(path)
+        return content_list
+
+
+class DocumentKeyphrasesComparator:
+    def __init__(self, master_keyphrases, comparison_keyphrases_map):
+        self.master_keyphrases = master_keyphrases
+        self.comparison_keyphrases_map = comparison_keyphrases_map
+        self.logger = get_logger("DocumentKeyphrasesComparator")
+
+    def compare(self):
+        master_words = self._extract_words(self.master_keyphrases)
+        self._check_similarity_with_keyphrases_map(master_words)
+
+    def _check_similarity_with_keyphrases_map(self, master_words):
+        for title, cmp_keyphrases in self.comparison_keyphrases_map.iteritems():
+            matching_part = self._count_matching_part(cmp_keyphrases, master_words)
+
+            # !!!
+            self.logger.info('Document entitled "{}" similarity to master is: {:.10f}'.format(title, matching_part))
+
+    def _count_matching_part(self, cmp_keyphrases, master_words):
+        cmp_words = self._extract_words(cmp_keyphrases)
+        matching_count = 0
+        for word in cmp_words:
+            if word in master_words:
+                matching_count += 1
+        matching_part = matching_count / float(len(cmp_words))
+        return matching_part
+
+    @staticmethod
+    def _extract_words(phrases):
+        words_set = set()
+        for phrase in phrases:
+            words = phrase[0].split()
+            for w in words:
+                words_set.add(w)
+        return words_set
 
 
 loggers = {}
@@ -353,6 +504,10 @@ def parse_args():
     parser.add_argument('src', choices=['wiki', 'file', 'dir'], help='source of text')
     parser.add_argument('path', help='title of coma-separated Wikipedia articles/path to file/path to directory',
                         type=str)
+    parser.add_argument('--master',
+                        help='Find linked wiki articles or files located in the file\'s directory (depending on source \
+                        option) that are similar to the master article or file. This option might take a long period \
+                        of time for wiki articles. dir option is not supported.', action='store_true')
     return parser.parse_args()
 
 

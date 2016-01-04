@@ -57,7 +57,7 @@ class Application(Frame):
     def extract_file(self):
         if self.file_path:
             provider = FileContentProvider(self.file_path)
-            extractor = KeyphraseExtractor(provider.get_content())
+            extractor = KeyphraseExtractor(provider)
 
             self.extract(extractor)
 
@@ -68,7 +68,7 @@ class Application(Frame):
     def extract_dir(self):
         if self.dir_path:
             provider = DirectoryContentProvider(self.dir_path)
-            extractor = KeyphraseExtractor(provider.get_content())
+            extractor = KeyphraseExtractor(provider)
 
             self.extract(extractor)
 
@@ -80,7 +80,7 @@ class Application(Frame):
         self.wiki_titles = self.wiki_entry.get()
         if self.wiki_titles:
             provider = WikipediaContentProvider(self.wiki_titles)
-            extractor = KeyphraseExtractor(provider.get_content())
+            extractor = KeyphraseExtractor(provider)
             
             self.extract(extractor)
 
