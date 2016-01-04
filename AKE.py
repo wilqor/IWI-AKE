@@ -287,15 +287,19 @@ class KeyphraseExtractor:
 class MultipleProvidersKeyphraseExtractor:
     def __init__(self, providers):
         self.providers = providers
+        self.logger = get_logger('MultipleProvidersKeyphraseExtractor')
 
     def extract_keyphrases_map_by_textrank(self):
         keyphrases_dict = {}
         for provider in self.providers:
             extractor = KeyphraseExtractor(provider)
             title = provider.get_title()
-            keyphrases = extractor.extract_keyphrases_by_textrank()
-            top_keyphrases = extractor.get_top_keyphrases(keyphrases, 0.2)
-            keyphrases_dict[title] = top_keyphrases
+            try:
+                keyphrases = extractor.extract_keyphrases_by_textrank()
+                top_keyphrases = extractor.get_top_keyphrases(keyphrases, 0.2)
+                keyphrases_dict[title] = top_keyphrases
+            except ContentProviderException:
+                self.logger.warn('Could not extract keyphrases from source entitled {}'.format(title))
         return keyphrases_dict
 
 
