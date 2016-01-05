@@ -49,6 +49,13 @@ class System:
                 clustered_result += "\t" + s + "\n"
         return clustered_result
 
+    @staticmethod
+    def get_document_similarity_string(document_similarity):
+        doc_string = 'Found document similarity to master:\n\n'
+        for similarity in document_similarity:
+            doc_string += '{0:<45}: {1:.2f}\n'.format(similarity[0], similarity[1])
+        return doc_string
+
     def run(self):
         try:
             main_provider = self._get_main_provider()
@@ -67,7 +74,8 @@ class System:
 
             if comparison_extractor is not None:
                 comparison_keyphrases_map = comparison_extractor.extract_keyphrases_map_by_textrank()
-                DocumentKeyphrasesComparator(top_keyphrases, comparison_keyphrases_map).compare()
+                similarity = DocumentKeyphrasesComparator(top_keyphrases, comparison_keyphrases_map).compare()
+                self.logger.info(self.get_document_similarity_string(similarity))
 
         except ConfigurationException:
             self.logger.error('Configuration error, could not start keyphrase extraction')
@@ -451,14 +459,18 @@ class DocumentKeyphrasesComparator:
 
     def compare(self):
         master_words = self._extract_words(self.master_keyphrases)
-        self._check_similarity_with_keyphrases_map(master_words)
+        self.logger.info('Starting document comparison...')
+        document_similarity = self._check_similarity_with_keyphrases_map(master_words)
+        self.logger.info('Document comparison finished')
+        return document_similarity
 
     def _check_similarity_with_keyphrases_map(self, master_words):
+        similarity = {}
         for title, cmp_keyphrases in self.comparison_keyphrases_map.iteritems():
             matching_part = self._count_matching_part(cmp_keyphrases, master_words)
-
-            # !!!
-            self.logger.info('Document entitled "{}" similarity to master is: {:.10f}'.format(title, matching_part))
+            similarity[title] = matching_part
+        similarity = sorted(similarity.items(), key=operator.itemgetter(1), reverse=True)
+        return similarity
 
     def _count_matching_part(self, cmp_keyphrases, master_words):
         cmp_words = self._extract_words(cmp_keyphrases)
@@ -477,7 +489,6 @@ class DocumentKeyphrasesComparator:
             for w in words:
                 words_set.add(w)
         return words_set
-
 
 loggers = {}
 
