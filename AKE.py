@@ -10,6 +10,8 @@ python AKE.py file res/java_usage --master
 import argparse
 import os
 import sys
+
+import math
 import wikipedia
 import itertools
 import nltk
@@ -51,6 +53,8 @@ class System:
 
     @staticmethod
     def get_document_similarity_string(document_similarity):
+        if not document_similarity:
+            return 'No similar documents found'
         doc_string = 'Found document similarity to master:\n\n'
         for similarity in document_similarity:
             doc_string += '{0:<45}: {1:.2f}\n'.format(similarity[0], similarity[1])
@@ -217,7 +221,6 @@ class KeyphraseExtractor:
     def _build_word_pagerank_ranks_from_graph(self, graph):
         word_ranks = {}
         ranks = networkx.pagerank(graph)
-        # keep top n_keywords, sort in descending order by score
         sorted_top_ranks = sorted(ranks.items(), key=operator.itemgetter(1), reverse=True)
         total_rank = 0
         for word_rank in sorted_top_ranks:
@@ -251,7 +254,7 @@ class KeyphraseExtractor:
         for phrase in keyphrases:
             total_sum += phrase[1]
 
-        multiplier = 1/total_sum
+        multiplier = 1 / total_sum
         result = []
         for phrase in keyphrases:
             result.append((phrase[0], phrase[1] * multiplier))
@@ -452,10 +455,11 @@ class DirectoryContentLister:
 
 
 class DocumentKeyphrasesComparator:
-    def __init__(self, master_keyphrases, comparison_keyphrases_map):
+    def __init__(self, master_keyphrases, comparison_keyphrases_map, threshold=0.45):
         self.master_keyphrases = master_keyphrases
         self.comparison_keyphrases_map = comparison_keyphrases_map
         self.logger = get_logger("DocumentKeyphrasesComparator")
+        self.threshold = threshold
 
     def compare(self):
         master_words = self._extract_words(self.master_keyphrases)
@@ -470,16 +474,16 @@ class DocumentKeyphrasesComparator:
             matching_part = self._count_matching_part(cmp_keyphrases, master_words)
             similarity[title] = matching_part
         similarity = sorted(similarity.items(), key=operator.itemgetter(1), reverse=True)
-        return similarity
+        top = filter(lambda x: x[1] > self.threshold, similarity)
+        return top
 
     def _count_matching_part(self, cmp_keyphrases, master_words):
         cmp_words = self._extract_words(cmp_keyphrases)
-        matching_count = 0
-        for word in cmp_words:
-            if word in master_words:
-                matching_count += 1
-        matching_part = matching_count / float(len(cmp_words))
-        return matching_part
+        matching_count = len(master_words.intersection(cmp_words))
+        divider = math.sqrt(len(master_words) * len(cmp_words))
+        if divider == 0:
+            return 0
+        return matching_count / divider
 
     @staticmethod
     def _extract_words(phrases):
@@ -489,6 +493,7 @@ class DocumentKeyphrasesComparator:
             for w in words:
                 words_set.add(w)
         return words_set
+
 
 loggers = {}
 
