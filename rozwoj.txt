@@ -1,5 +1,16 @@
-﻿klasteryzacja dla fraz, np. klaster python (python language, python scripting), tag java (java compiler, java application) i language (programing language)
-podobieństwo dla plików i artykułów na wiki: jeden master artykuł/plik i na podstawie linków/kategorii/pozostałych plików w folderze wybór podobnych (których frazy kluczowe się pokrywają)
-gui: konfigurowalny współczynnik do obcinania
-
-dokument o uniwersalnym tagowaniu tekstu
+﻿Dokument
+1. Temat - bez zmian
+2. Zastosowany algorytm - opis pojec, proste przyklady:
+- textrank/pagerank/autorski algorytm (K)
+- klasteryzacja fraz kluczowych (K)
+- wyznaczanie podobienstwa na podstawie fraz kluczowych (J)
+3. Srodowisko programistyczne - przerobienie punktu o narzedziach,
+opisanie instalacji na podstawie installation.txt (J)
+4. Interfejs konsolowy - oferowana funkcjonalnosc, opis parametrow wejsciowych,
+high-level sposob dzialania (J)
+5. Interfejs graficzny - funkcjonalnosc w porownaniu do tekstowego,
+screeny z dzialania z opisem, co mozna kliknac (K)
+6. Interfejs programistyczny - najwazniejsze klasy, metody, typy danych (K)
+7. Rezultaty - bez zmian
+8. Wydajnosc - bez zmian
+9. Podsumowanie - H2O na koniec, sugestie dalszych prac i rozwoju (J)
