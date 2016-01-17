@@ -1,10 +1,10 @@
 """
 Exemplary usages:
 python AKE.py wiki "Python (programming language), Java"
-python AKE.py file res/python_usage
+python AKE.py file res/python_usage.txt
 python AKE.py dir res
-python AKE.py file res/python_usage --master
-python AKE.py file res/java_usage --master
+python AKE.py file res/python_usage.txt --master
+python AKE.py file res/java_usage.txt --master
 """
 
 import argparse
@@ -525,7 +525,7 @@ def parse_args():
     parser.add_argument('path', help='title of coma-separated Wikipedia articles/path to file/path to directory',
                         type=str)
     parser.add_argument('--master',
-                        help='Find linked wiki articles or files located in the file\'s directory (depending on source \
+                        help='find linked wiki articles or files located in the file\'s directory (depending on source \
                         option) that are similar to the master article or file. This option might take a long period \
                         of time for wiki articles. dir option is not supported.', action='store_true')
     return parser.parse_args()
